@@ -51,15 +51,18 @@ function table(title, scope) {
   return `${str}</tbody></table>`;
 }
 
+let logo;
 function nodeinfo() {
-  const logo = fs.readFileSync('./logo.png');
+  if (!logo)
+    logo = `data:image/png;base64,${fs.readFileSync('./logo.png').toString('base64')}`;
+
   const tables = [
     table('Versions', process.versions),
     table('Features', process.features),
     table('Environment', process.env),
   ];
   return template
-    .replace('LOGO', `data:image/png;base64,${logo.toString('base64')}`)
+    .replace('LOGO', logo)
     .replace('TABLES', tables.join(''));
 }
 
