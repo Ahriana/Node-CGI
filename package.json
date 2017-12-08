@@ -1,0 +1,17 @@
+{
+  "name": "node-cgi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RosieCode95/Node-CGI.git"
+  },
+  "author": "RosieSnek",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/RosieCode95/Node-CGI/issues"
+  },
+  "homepage": "https://github.com/RosieCode95/Node-CGI#readme"
+}
