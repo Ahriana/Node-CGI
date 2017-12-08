@@ -48,6 +48,7 @@ for (const key of Object.keys(process.env)) {
   } else if (/^SERVER_/.test(key)) {
     safeGlobals.server[key.slice(7).toLowerCase()] = process.env[key];
   } else if (key === 'QUERY_STRING') {
+    safeGlobals.request.queryString = process.env.QUERY_STRING;
     safeGlobals.request.query = querystring.parse(process.env.QUERY_STRING);
   }
 }
