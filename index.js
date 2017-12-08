@@ -5,6 +5,7 @@ const http = require('http');
 const path = require('path');
 const util = require('util');
 const { _builtinLibs: builtinLibs } = require('repl');
+const nodeinfo = require('./nodeinfo');
 
 // eslint-disable-next-line no-console
 const stderr = (...x) => console.error(...x);
@@ -107,8 +108,9 @@ async function finish() {
           global: contextGlobal,
           ...contextGlobal,
           require: scopedRequire,
-          write: (x) => { output += `${x}\n`; },
+          write: (x) => { output += x; },
           process,
+          nodeinfo: () => { output += nodeinfo(); },
         });
       } catch (err) {
         stderr(err);
