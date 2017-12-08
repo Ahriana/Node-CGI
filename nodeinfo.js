@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const template = `<html lang=en>
 <head>
 <style>
@@ -35,7 +37,7 @@ table.table thead {
 </head>
 <body>
 <div class=container>
-<img src=logo.png class=pic alt=NodeCGI>
+<img src="LOGO" class=pic alt=NodeCGI>
 TABLES
 </body>
 </html>`;
@@ -50,12 +52,15 @@ function table(title, scope) {
 }
 
 function nodeinfo() {
+  const logo = fs.readFileSync('./logo.png');
   const tables = [
     table('Versions', process.versions),
     table('Features', process.features),
     table('Environment', process.env),
   ];
-  return template.replace('TABLES', tables.join(''));
+  return template
+    .replace('LOGO', `data:image/png;base64,${logo.toString('base64')}`)
+    .replace('TABLES', tables.join(''));
 }
 
 module.exports = nodeinfo;
