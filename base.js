@@ -94,14 +94,20 @@ async function finish() {
 
   let output = '';
   let buffer = '';
+  let inJs = false;
   for (let i = 0; i < source.length; i++) {
     const current = source[i];
     const next = source[i + 1];
     if (current === '<' && next === '?') {
       output += buffer;
       buffer = '';
+      inJs = true;
       i++;
     } else if (current === '?' && next === '>') {
+      if (!inJs) {
+        buffer += current;
+        continue;
+      }
       try {
         const script = new vm.Script(buffer);
         script.runInNewContext({
@@ -116,6 +122,7 @@ async function finish() {
         stderr(err);
         return process.stdout.write(RES_500);
       }
+      inJs = false;
       buffer = '';
       i++;
     } else {
