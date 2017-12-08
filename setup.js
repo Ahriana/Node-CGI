@@ -4,9 +4,7 @@ let shebang = process.platform === 'win32' ?
   `#!"${process.execPath}"` :
   '#!/usr/bin/env node';
 
-fs.writeFile('./index.js', `${shebang}\nrequire('./base.js');`, (err) => {
-  if (err)
-    throw err;
+fs.writeFileSync('./index.js', `${shebang}\nrequire('./base.js');`);
+fs.chmodSync('./index.js', '755');
 
-  process.exit(0);
-});
+process.exit(0);
