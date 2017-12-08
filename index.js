@@ -4,6 +4,10 @@ const querystring = require('querystring');
 const http = require('http');
 const path = require('path');
 const util = require('util');
+const { _builtinLibs: builtinLibs } = require('repl');
+
+// eslint-disable-next-line no-console
+const stderr = (...x) => console.error(...x);
 
 const safeGlobals = {
   request: {
@@ -67,6 +71,8 @@ const contextGlobal = {
 
 const RELATIVE_DIR = path.dirname(process.env.PATH_TRANSLATED);
 function scopedRequire(name) {
+  if (builtinLibs.includes(name))
+    return require(name);
   return require(path.resolve(RELATIVE_DIR, name));
 }
 
@@ -78,8 +84,9 @@ const RES_500 = [
 const readFile = (...args) => util.promisify(fs.readFile)(...args).then((s) => s.toString());
 async function finish() {
   try {
-   var source = await readFile(process.env.PATH_TRANSLATED);
+    var source = await readFile(process.env.PATH_TRANSLATED);
   } catch (err) {
+    stderr(err);
     return process.stdout.write(RES_500);
   }
 
@@ -103,6 +110,7 @@ async function finish() {
           process,
         });
       } catch (err) {
+        stderr(err);
         return process.stdout.write(RES_500);
       }
       buffer = '';
