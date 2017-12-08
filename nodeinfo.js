@@ -43,7 +43,7 @@ TABLES
 </html>`;
 
 function table(title, scope) {
-  let str = `<table class="table"> <thead> <tr> <th>${title}</th> </tr> </thead> <tbody>`;
+  let str = `<table class="table"> <thead> <tr> <th colspan="2">${title}</th> </tr> </thead> <tbody>`;
   for (var v in scope) {
     if (scope.hasOwnProperty(v))
       str += `<tr><td>${v}</td><td>${scope[v]}</td></tr>`;
