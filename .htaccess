@@ -1,3 +1,0 @@
-Action Node-CGI.js /cgi-bin/Node-CGI.js
-AddHandler Node-CGI.js .awoo 
-
