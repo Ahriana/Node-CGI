@@ -2,7 +2,6 @@
 <html lang=en>
 <body>
   <h1>hi</h1>
-  ?>
   <?
   require('util');
   write(JSON.stringify(global, null, 2));

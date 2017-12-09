@@ -6,7 +6,7 @@ const path = require('path');
 const util = require('util');
 const { _builtinLibs: builtinLibs } = require('repl');
 const nodeinfo = require('./nodeinfo');
-const displayErrors = true;
+const displayErrors = false;
 
 // eslint-disable-next-line no-console
 const stderr = (...x) => console.error(...x);
