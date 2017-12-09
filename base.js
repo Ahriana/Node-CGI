@@ -6,6 +6,7 @@ const path = require('path');
 const util = require('util');
 const { _builtinLibs: builtinLibs } = require('repl');
 const nodeinfo = require('./nodeinfo');
+const displayErrors = false;
 
 // eslint-disable-next-line no-console
 const stderr = (...x) => console.error(...x);
@@ -78,7 +79,7 @@ function scopedRequire(name) {
   return require(path.resolve(RELATIVE_DIR, name));
 }
 
-const RES_500 = [
+let RES_500 = [
   'Status: 500 Internal Server Error',
   'Content-Length: 0',
   '', '',
@@ -89,7 +90,7 @@ async function finish() {
     var source = await readFile(process.env.PATH_TRANSLATED);
   } catch (err) {
     stderr(err);
-    return process.stdout.write(RES_500);
+    return process.stdout.write(displayErrors ? RES_500 + err.stack: RES_500);
   }
 
   let output = '';
@@ -120,7 +121,7 @@ async function finish() {
         });
       } catch (err) {
         stderr(err);
-        return process.stdout.write(RES_500);
+        return process.stdout.write(displayErrors ? RES_500 + err.stack : RES_500);
       }
       inJs = false;
       buffer = '';
