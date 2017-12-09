@@ -6,7 +6,7 @@ const path = require('path');
 const util = require('util');
 const { _builtinLibs: builtinLibs } = require('repl');
 const nodeinfo = require('./nodeinfo');
-const displayErrors = false;
+const displayErrors = true;
 
 // eslint-disable-next-line no-console
 const stderr = (...x) => console.error(...x);
@@ -81,7 +81,6 @@ function scopedRequire(name) {
 
 let RES_500 = [
   'Status: 500 Internal Server Error',
-  'Content-Length: 0',
   '', '',
 ].join('\r\n');
 const readFile = (...args) => util.promisify(fs.readFile)(...args).then((s) => s.toString());
@@ -136,7 +135,6 @@ async function finish() {
   const status = response.status || 200;
   process.stdout.write([
     `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
-    `Content-Length: ${Buffer.byteLength(output)}`,
     ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
     '', '',
   ].join('\r\n'));
