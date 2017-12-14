@@ -6,7 +6,6 @@ const path = require('path');
 const util = require('util');
 const { _builtinLibs: builtinLibs } = require('repl');
 const nodeinfo = require('./nodeinfo');
-const displayErrors = false;
 
 // eslint-disable-next-line no-console
 const stderr = (...x) => console.error(...x);
@@ -79,6 +78,18 @@ function scopedRequire(name) {
   return require(path.resolve(RELATIVE_DIR, name));
 }
 
+function runScript(src, output) {
+  const script = new vm.Script(src);
+  script.runInNewContext({
+    global: contextGlobal,
+    ...contextGlobal,
+    require: scopedRequire,
+    write: (x) => { output(x); },
+    process,
+    nodeinfo: () => { output(nodeinfo()); },
+  });
+}
+
 let RES_500 = [
   'Status: 500 Internal Server Error',
   '', '',
@@ -89,17 +100,36 @@ async function finish() {
     var source = await readFile(process.env.PATH_TRANSLATED);
   } catch (err) {
     stderr(err);
-    return process.stdout.write(displayErrors ? RES_500 + err.stack: RES_500);
+    return process.stdout.write(RES_500);
   }
 
-  let output = '';
+  let startOffset = 0;
+  if (source[0] === '<' && source[1] === '?') {
+    let code = '';
+    for (let i = 2; i < source.length; i++) {
+      if (source[i] === '?' && source[i + 1] === '>')
+        break;
+      code += source[i];
+      startOffset = i + 1;
+    }
+    runScript(code);
+  }
+
+  const response = safeGlobals.response;
+  const status = response.status || 200;
+  process.stdout.write([
+    `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
+    ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
+    '', '',
+  ].join('\r\n'));
+
   let buffer = '';
   let inJs = false;
-  for (let i = 0; i < source.length; i++) {
+  for (let i = startOffset; i < source.length; i++) {
     const current = source[i];
     const next = source[i + 1];
     if (current === '<' && next === '?') {
-      output += buffer;
+      process.stdout.write(buffer);
       buffer = '';
       inJs = true;
       i++;
@@ -109,18 +139,10 @@ async function finish() {
         continue;
       }
       try {
-        const script = new vm.Script(buffer);
-        script.runInNewContext({
-          global: contextGlobal,
-          ...contextGlobal,
-          require: scopedRequire,
-          write: (x) => { output += x; },
-          process,
-          nodeinfo: () => { output += nodeinfo(); },
-        });
+        runScript(buffer, (x) => process.stdout.write(x));
       } catch (err) {
         stderr(err);
-        return process.stdout.write(displayErrors ? RES_500 + err.stack : RES_500);
+        return process.stdout.write(RES_500);
       }
       inJs = false;
       buffer = '';
@@ -129,15 +151,7 @@ async function finish() {
       buffer += current;
     }
   }
-  output += buffer;
+  process.stdout.write(buffer);
 
-  const response = safeGlobals.response;
-  const status = response.status || 200;
-  process.stdout.write([
-    `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
-    ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
-    '', '',
-  ].join('\r\n'));
-  process.stdout.write(output);
   process.stdout.write('\r\n\r\n');
 }

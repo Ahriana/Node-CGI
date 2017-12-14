@@ -1,3 +1,4 @@
+<? response.status = 400 ?>
 <!DOCTYPE html>
 <html lang=en>
 <body>
@@ -8,6 +9,5 @@
   write('hello i am a server');
   ?>
 <h1>aaa</h1>
-  <? nodeinfo() ?>
 </body>
 </html>
