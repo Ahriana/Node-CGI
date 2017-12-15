@@ -1,4 +1,4 @@
-<? response.status = 400 ?>
+<? response.status = 400; ?>
 <!DOCTYPE html>
 <html lang=en>
 <body>
@@ -6,6 +6,7 @@
   <?
   require('util');
   write(JSON.stringify(global, null, 2));
+exit();
   write('hello i am a server');
   ?>
 <h1>aaa</h1>

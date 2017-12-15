@@ -78,16 +78,31 @@ function scopedRequire(name) {
   return require(path.resolve(RELATIVE_DIR, name));
 }
 
-function runScript(src, output) {
+function runScript(src, output = true) {
+  const out = output ? (x) => process.stdout.write(x) : () => true;
   const script = new vm.Script(src);
-  script.runInNewContext({
-    global: contextGlobal,
-    ...contextGlobal,
-    require: scopedRequire,
-    write: (x) => { output(x); },
-    process,
-    nodeinfo: () => { output(nodeinfo()); },
-  });
+  try {
+    script.runInNewContext({
+      global: contextGlobal,
+      ...contextGlobal,
+      require: scopedRequire,
+      write: (x) => { out(x); },
+      process,
+      nodeinfo: () => { out(nodeinfo()); },
+      exit: () => {
+        const e = new Error();
+        e.EXIT_EARLY = true;
+        throw e;
+      },
+    });
+  } catch (err) {
+    if (err.EXIT_EARLY)
+      return false;
+    else
+      stderr(err);
+  }
+
+  return true;
 }
 
 let RES_500 = [
@@ -112,7 +127,8 @@ async function finish() {
       code += source[i];
       startOffset = i + 1;
     }
-    runScript(code);
+    if (!runScript(code, false))
+      startOffset = source.length;
   }
 
   const response = safeGlobals.response;
@@ -138,12 +154,8 @@ async function finish() {
         buffer += current;
         continue;
       }
-      try {
-        runScript(buffer, (x) => process.stdout.write(x));
-      } catch (err) {
-        stderr(err);
-        return process.stdout.write(RES_500);
-      }
+      if (!runScript(buffer))
+        break;
       inJs = false;
       buffer = '';
       i++;
@@ -153,8 +165,8 @@ async function finish() {
   }
   if (inJs) {
     // no trailing "?>" in script, but its ok
-    runScript(buffer, (x) => process.stdout.write(x));
-  } else {
+    runScript(buffer);
+  } else if (buffer) {
     process.stdout.write(buffer);
   }
 
