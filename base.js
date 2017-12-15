@@ -151,7 +151,12 @@ async function finish() {
       buffer += current;
     }
   }
-  process.stdout.write(buffer);
+  if (inJs) {
+    // no trailing "?>" in script, but its ok
+    runScript(buffer, (x) => process.stdout.write(x));
+  } else {
+    process.stdout.write(buffer);
+  }
 
   process.stdout.write('\r\n\r\n');
 }
