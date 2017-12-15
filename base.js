@@ -78,11 +78,11 @@ function scopedRequire(name) {
   return require(path.resolve(RELATIVE_DIR, name));
 }
 
-function runScript(src, output = true) {
+function runScript(src, output = true, context) {
   const out = output ? (x) => process.stdout.write(x) : () => true;
   const script = new vm.Script(src);
-  try {
-    script.runInNewContext({
+  if (context === undefined) {
+    context = vm.createContext({
       global: contextGlobal,
       ...contextGlobal,
       require: scopedRequire,
@@ -94,7 +94,14 @@ function runScript(src, output = true) {
         e.EXIT_EARLY = true;
         throw e;
       },
+      include: (name) => {
+        const s = fs.readFileSync(path.join(RELATIVE_DIR, name)).toString();
+        parse(s, 0, context);
+      },
     });
+  }
+  try {
+    script.runInContext(context);
   } catch (err) {
     if (err.EXIT_EARLY)
       return false;
@@ -139,6 +146,12 @@ async function finish() {
     '', '',
   ].join('\r\n'));
 
+  parse(source, startOffset);
+
+  process.stdout.write('\r\n\r\n');
+}
+
+function parse(source, startOffset = 0, context) {
   let buffer = '';
   let inJs = false;
   for (let i = startOffset; i < source.length; i++) {
@@ -154,7 +167,7 @@ async function finish() {
         buffer += current;
         continue;
       }
-      if (!runScript(buffer))
+      if (!runScript(buffer, true, context))
         break;
       inJs = false;
       buffer = '';
@@ -165,10 +178,8 @@ async function finish() {
   }
   if (inJs) {
     // no trailing "?>" in script, but its ok
-    runScript(buffer);
+    runScript(buffer, true, context);
   } else if (buffer) {
     process.stdout.write(buffer);
   }
-
-  process.stdout.write('\r\n\r\n');
 }

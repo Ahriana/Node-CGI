@@ -5,9 +5,8 @@
   <h1>hi</h1>
   <?
   require('util');
-  write(JSON.stringify(global, null, 2));
-exit();
   write('hello i am a server');
+include('./included.js');
   ?>
 <h1>aaa</h1>
 </body>
