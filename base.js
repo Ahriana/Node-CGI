@@ -106,7 +106,7 @@ function out(x) {
     ].join('\r\n'));
   }
 
-  process.stdout.write(x);
+  process.stdout.write(String(x));
 }
 
 function parse(source, context) {
