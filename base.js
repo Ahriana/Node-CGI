@@ -1,11 +1,13 @@
+const util = require('util');
 const fs = require('fs');
-const vm = require('vm');
 const querystring = require('querystring');
 const http = require('http');
 const path = require('path');
-const util = require('util');
+const vm = require('vm');
 const { _builtinLibs: builtinLibs } = require('repl');
-const nodeinfo = require('./nodeinfo');
+
+const readFile = (...args) => util.promisify(fs.readFile)(...args).then((s) => s.toString());
+
 
 // eslint-disable-next-line no-console
 const stderr = (...x) => console.error(...x);
@@ -29,6 +31,7 @@ const safeGlobals = {
     getHeader(name) {
       return this.headers[name.toLowerCase()];
     },
+    status: 200,
   },
   server: {},
 };
@@ -54,11 +57,6 @@ for (const key of Object.keys(process.env)) {
   }
 }
 
-if (+safeGlobals.request.headers['content-length'] === 0)
-  finish();
-else
-  process.stdin.on('end', finish);
-
 const contextGlobal = {
   get request() {
     return safeGlobals.request;
@@ -71,52 +69,16 @@ const contextGlobal = {
   },
 };
 
-const RELATIVE_DIR = path.dirname(process.env.PATH_TRANSLATED);
-function scopedRequire(name) {
-  if (builtinLibs.includes(name))
-    return require(name);
-  return require(path.resolve(RELATIVE_DIR, name));
-}
-
-function runScript(src, output = true, context) {
-  const out = output ? (x) => process.stdout.write(x) : () => true;
-  const script = new vm.Script(src);
-  if (context === undefined) {
-    context = vm.createContext({
-      global: contextGlobal,
-      ...contextGlobal,
-      require: scopedRequire,
-      write: (x) => { out(x); },
-      process,
-      nodeinfo: () => { out(nodeinfo()); },
-      exit: () => {
-        const e = new Error();
-        e.EXIT_EARLY = true;
-        throw e;
-      },
-      include: (name) => {
-        const s = fs.readFileSync(path.join(RELATIVE_DIR, name)).toString();
-        parse(s, 0, context);
-      },
-    });
-  }
-  try {
-    script.runInContext(context);
-  } catch (err) {
-    if (err.EXIT_EARLY)
-      return false;
-    else
-      stderr(err);
-  }
-
-  return true;
-}
+if (+safeGlobals.request.headers['content-length'] === 0)
+  finish();
+else
+  process.stdin.on('end', finish);
 
 let RES_500 = [
   'Status: 500 Internal Server Error',
   '', '',
 ].join('\r\n');
-const readFile = (...args) => util.promisify(fs.readFile)(...args).then((s) => s.toString());
+
 async function finish() {
   try {
     var source = await readFile(process.env.PATH_TRANSLATED);
@@ -125,61 +87,104 @@ async function finish() {
     return process.stdout.write(RES_500);
   }
 
-  let startOffset = 0;
-  if (source[0] === '<' && source[1] === '?') {
-    let code = '';
-    for (let i = 2; i < source.length; i++) {
-      if (source[i] === '?' && source[i + 1] === '>')
-        break;
-      code += source[i];
-      startOffset = i + 1;
-    }
-    if (!runScript(code, false))
-      startOffset = source.length;
-  }
-
-  const response = safeGlobals.response;
-  const status = response.status || 200;
-  process.stdout.write([
-    `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
-    ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
-    '', '',
-  ].join('\r\n'));
-
-  parse(source, startOffset);
-
-  process.stdout.write('\r\n\r\n');
+  parse(source);
 }
 
-function parse(source, startOffset = 0, context) {
+let responseHeadWritten = false;
+function out(x) {
+  if (!x)
+    return;
+
+  if (!responseHeadWritten) {
+    responseHeadWritten = true;
+    const response = safeGlobals.response;
+    const status = response.status;
+    process.stdout.write([
+      `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
+      ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
+      '',
+    ].join('\r\n'));
+  }
+
+  process.stdout.write(x);
+}
+
+function parse(source, context) {
   let buffer = '';
   let inJs = false;
-  for (let i = startOffset; i < source.length; i++) {
+
+  for (let i = 0; i < source.length; i++) {
     const current = source[i];
-    const next = source[i + 1];
-    if (current === '<' && next === '?') {
-      process.stdout.write(buffer);
+    if (current === '<' && source[i + 1] === '?') {
+      // entering js
+      out(buffer);
       buffer = '';
       inJs = true;
       i++;
-    } else if (current === '?' && next === '>') {
+    } else if (current === '?' && source[i + 1] === '>') {
       if (!inJs) {
         buffer += current;
         continue;
       }
-      if (!runScript(buffer, true, context))
-        break;
-      inJs = false;
+
+      const exitEarly = !runScript(buffer, context);
+
       buffer = '';
+      inJs = false;
       i++;
+
+      if (exitEarly)
+        break;
     } else {
       buffer += current;
     }
   }
-  if (inJs) {
-    // no trailing "?>" in script, but its ok
-    runScript(buffer, true, context);
-  } else if (buffer) {
-    process.stdout.write(buffer);
+
+  if (inJs && buffer !== '') {
+    // no trailing "?>"
+    runScript(buffer, context);
+  } else {
+    out(buffer);
   }
+}
+
+const RELATIVE_DIR = path.dirname(process.env.PATH_TRANSLATED);
+function scopedRequire(name) {
+  if (builtinLibs.includes(name))
+    return require(name);
+  return require(path.resolve(RELATIVE_DIR, name));
+}
+
+const kExitEarly = Symbol('exit early');
+function runScript(source, context) {
+  const script = new vm.Script(source);
+  if (context === undefined) {
+    context = vm.createContext({
+      global: contextGlobal,
+      ...contextGlobal,
+      process,
+      require: scopedRequire,
+      write: out,
+      exit: () => {
+        const e = new Error();
+        e[kExitEarly] = true;
+        throw e;
+      },
+      include: (name) => {
+        const s = fs.readFileSync(path.join(RELATIVE_DIR, name)).toString();
+        parse(s, context);
+      },
+    });
+  }
+
+  try {
+    script.runInContext(context);
+  } catch (err) {
+    if (err[kExitEarly])
+      return false;
+    else
+      stderr(err);
+  }
+
+  return true;
 }

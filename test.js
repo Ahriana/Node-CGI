@@ -6,7 +6,6 @@
   <?
   require('util');
   write('hello i am a server');
-include('./included.js');
   ?>
 <h1>aaa</h1>
 </body>
