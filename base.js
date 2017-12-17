@@ -4,6 +4,7 @@ const querystring = require('querystring');
 const http = require('http');
 const path = require('path');
 const vm = require('vm');
+const crypto = require('crypto');
 const { _builtinLibs: builtinLibs } = require('repl');
 
 const readFile = (...args) => util.promisify(fs.readFile)(...args).then((s) => s.toString());
@@ -34,6 +35,7 @@ const safeGlobals = {
     status: 200,
   },
   server: {},
+  session: undefined,
 };
 
 process.stdin.on('data', (chunk) => {
@@ -67,6 +69,14 @@ const contextGlobal = {
   get server() {
     return safeGlobals.server;
   },
+  get session() {
+    if (safeGlobals.session === undefined) {
+      safeGlobals.session = {};
+      const key = crypto.createHash('sha256').update(new Date().toString()).digest('hex');
+      safeGlobals.response.setHeader('Set-Cookie', `session=${key}`);
+    }
+    return safeGlobals.session;
+  },
 };
 
 if (+safeGlobals.request.headers['content-length'] === 0)
@@ -88,6 +98,8 @@ async function finish() {
   }
 
   parse(source);
+
+  process.stdout.write('\r\n\r\n');
 }
 
 let responseHeadWritten = false;
@@ -102,7 +114,7 @@ function out(x) {
     process.stdout.write([
       `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
       ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
-      '',
+      '', '',
     ].join('\r\n'));
   }
 
