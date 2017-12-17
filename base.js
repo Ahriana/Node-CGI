@@ -27,7 +27,14 @@ const safeGlobals = {
       'content-type': 'text/html',
     },
     setHeader(name, value) {
-      this.headers[name.toLowerCase()] = value;
+      name = name.toLowerCase();
+      if (name === 'set-cookie') {
+        if (this.headers['set-cookie'] === undefined)
+          this.headers['set-cookie'] = [];
+        this.headers['set-cookie'].push(value);
+      } else {
+        this.headers[name] = value;
+      }
     },
     getHeader(name) {
       return this.headers[name.toLowerCase()];
@@ -36,6 +43,7 @@ const safeGlobals = {
   },
   server: {},
   session: undefined,
+  global: {},
 };
 
 process.stdin.on('data', (chunk) => {
@@ -48,7 +56,20 @@ for (const key of Object.keys(process.env)) {
       .toLowerCase()
       .split('_')
       .join('-');
-    safeGlobals.request.headers[name] = process.env[key];
+    const headers = safeGlobals.request.headers;
+    if (name === 'cookie') {
+      if (!headers.cookie)
+        headers.cookie = [];
+      const sets = process.env[key].split(';');
+      for (const set of sets) {
+        if (/^node_cgi_session/.test(set))
+          safeGlobals.session = require('./session').get(set.split('=')[1]);
+        else
+          headers.cookie.push(set);
+      }
+    } else {
+      headers[name] = process.env[key];
+    }
   } else if (/^REQUEST_/.test(key)) {
     safeGlobals.request[key.slice(8).toLowerCase()] = process.env[key];
   } else if (/^SERVER_/.test(key)) {
@@ -58,26 +79,6 @@ for (const key of Object.keys(process.env)) {
     safeGlobals.request.query = querystring.parse(process.env.QUERY_STRING);
   }
 }
-
-const contextGlobal = {
-  get request() {
-    return safeGlobals.request;
-  },
-  get response() {
-    return safeGlobals.response;
-  },
-  get server() {
-    return safeGlobals.server;
-  },
-  get session() {
-    if (safeGlobals.session === undefined) {
-      safeGlobals.session = {};
-      const key = crypto.createHash('sha256').update(new Date().toString()).digest('hex');
-      safeGlobals.response.setHeader('Set-Cookie', `session=${key}`);
-    }
-    return safeGlobals.session;
-  },
-};
 
 if (+safeGlobals.request.headers['content-length'] === 0)
   finish();
@@ -111,9 +112,21 @@ function out(x) {
     responseHeadWritten = true;
     const response = safeGlobals.response;
     const status = response.status;
+    const headers = [];
+    for (const name of Object.keys(response.headers)) {
+      if (name === 'set-cookie') {
+        for (const val of response.headers['set-cookie']) {
+          headers.push(`Set-Cookie: ${val}`);
+          if (/^node_cgi_session/.test(val))
+            require('./session').set(val.split('=')[1], safeGlobals.session);
+        }
+      } else {
+        headers.push(`${name}: ${response.headers[name]}`);
+      }
+    }
     process.stdout.write([
       `Status: ${status} ${http.STATUS_CODES[status] || ''}`.trim(),
-      ...Object.keys(response.headers).map((k) => `${k}: ${response.headers[k]}`),
+      ...headers,
       '', '',
     ].join('\r\n'));
   }
@@ -172,8 +185,26 @@ function runScript(source, context) {
   const script = new vm.Script(source);
   if (context === undefined) {
     context = vm.createContext({
-      global: contextGlobal,
-      ...contextGlobal,
+      get global() {
+        return safeGlobals.global;
+      },
+      get request() {
+        return safeGlobals.request;
+      },
+      get response() {
+        return safeGlobals.response;
+      },
+      get server() {
+        return safeGlobals.server;
+      },
+      get session() {
+        if (safeGlobals.session === undefined) {
+          safeGlobals.session = {};
+          const key = crypto.createHash('sha256').update(new Date().toString()).digest('hex');
+          safeGlobals.response.setHeader('Set-Cookie', `node_cgi_session=${key}`);
+        }
+        return safeGlobals.session;
+      },
       process,
       require: scopedRequire,
       write: out,
